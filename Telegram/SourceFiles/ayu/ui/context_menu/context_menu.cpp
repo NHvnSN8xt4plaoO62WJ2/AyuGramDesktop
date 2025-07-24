@@ -22,6 +22,10 @@
 #include "styles/style_menu_icons.h"
 #include "ui/widgets/popup_menu.h"
 #include "ui/widgets/menu/menu_add_action_callback_factory.h"
+#include "ui/widgets/fields/input_field.h"
+#include "ui/boxes/generic_box.h"
+#include "ayu/ui/boxes/local_message_editor.h"
+#include "ayu/ui/boxes/local_messages_manager.h"
 #include "window/window_peer_menu.h"
 
 #include "ayu/ui/message_history/history_section.h"
@@ -34,8 +38,10 @@
 #include "data/data_session.h"
 #include "history/view/history_view_context_menu.h"
 #include "history/view/history_view_element.h"
+#include "history/history.h"
 #include "window/window_controller.h"
 #include "window/window_session_controller.h"
+#include "base/unixtime.h"
 
 namespace AyuUi {
 
@@ -540,6 +546,97 @@ void AddBurnAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
 			item->markContentsRead();
 		},
 		&st::menuIconTTLAny);
+}
+
+void AddLocalMessageAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
+	if (!item) {
+		return;
+	}
+
+	const auto& settings = AyuSettings::getInstance();
+	if (!needToShowItem(settings.showAddLocalMessageInContextMenu)) {
+		return;
+	}
+
+	const auto history = item->history();
+	const auto controller = history->session().tryResolveWindow();
+	if (!controller) {
+		return;
+	}
+
+	menu->addAction(
+		tr::ayu_AddLocalMessage(tr::now),
+		[=]() {
+			controller->show(Box(
+				LocalMessageEditorBox,
+				controller,
+				history,
+				LocalMessageData{}));
+		},
+		&st::menuIconEdit);
+}
+
+void AddLocalMessagesManagerAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
+	if (!item) {
+		return;
+	}
+
+	const auto& settings = AyuSettings::getInstance();
+	if (!needToShowItem(settings.showAddLocalMessageInContextMenu)) {
+		return;
+	}
+
+	const auto history = item->history();
+	const auto controller = history->session().tryResolveWindow();
+	if (!controller) {
+		return;
+	}
+
+	// Only show if there are local messages in this chat
+	if (!AyuMessages::hasLocalMessages(history->peer, 0)) {
+		return;
+	}
+
+	menu->addAction(
+		tr::ayu_LocalMessagesManager(tr::now),
+		[=]() {
+			controller->show(Box(
+				LocalMessagesManagerBox,
+				controller,
+				history));
+		},
+		&st::menuIconInfo);
+}
+
+void AddLocalMessagesManagerToChatMenu(PeerData *peerData,
+									   Data::Thread *thread,
+									   not_null<Window::SessionController*> sessionController,
+									   const Window::PeerMenuCallback &addCallback) {
+	if (!peerData) {
+		return;
+	}
+
+	const auto& settings = AyuSettings::getInstance();
+	if (!needToShowItem(settings.showAddLocalMessageInContextMenu)) {
+		return;
+	}
+
+	const auto history = sessionController->session().data().history(peerData);
+	
+	// Only show if there are local messages in this chat
+	if (!AyuMessages::hasLocalMessages(peerData, 0)) {
+		return;
+	}
+
+	addCallback(
+		tr::ayu_LocalMessagesManager(tr::now),
+		[=]() {
+			sessionController->show(Box(
+				LocalMessagesManagerBox,
+				sessionController,
+				history));
+		},
+		&st::menuIconInfo);
 }
 
 } // namespace AyuUi
